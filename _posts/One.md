@@ -1,0 +1,16 @@
+---
+layout: 开博第一篇
+title:  "Welcome to Rambo's Blog!"
+date:   2019-12-09 09:20:21 +0800
+categories: 技术栈
+---
+**开博：将零零碎碎的知识点记录下来，坚持写！**
+
+我使用了jekyll + github pages来搭建博客模版，主要是涉及以下几点注意点：
+
+	1.Mac系统，安装jekyll需要使用ruby 2.4以上的版本，使用mac自带的ruby环境需要升级ruby 
+	2.升级ruby需要使用到rvm工具(ruby管理工具).
+	3.使用gem安装jekyll
+	4.申请一个github仓库，取名为：{用户名}/{用户名}.github.io，使用https://{用户名}.github.io  注：也可以使用fork一些大神的仓库，改一下配置文件和名字即可。
+	5.将本地的内容push到github上即可预览。 具体的实现可以查相关文档，这是一个大致的主流程。目前我不需要主题等相关功能，用最简单的就可以了。
+	
