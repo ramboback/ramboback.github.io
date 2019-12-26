@@ -1,0 +1,32 @@
+---
+layout: post
+title:  "逆向第一篇!"
+date:   2019-12-26 09:20:21 +0800
+categories: 逆向
+---
+_懂的更多才能更主动！_
+
+逆向基本上是针对客户端反编译的行为，客户端暴露给公众，所以安全尤为重要，总结一下最近自研逆向的心得。
+
+例如，我现在想要分析一款用车app，首先我们先注册以一个正常的用户登录到该系统中，然后通过抓包软件分析网络请求的格式；接着我们再用反编译工具将客户端的可执行程序进行反编译，分析工程代码。
+
+以逆向安卓app为例，用到以下工具：
+
+1.抓包工具：Charles
+
+2.反编译工具：dex2jar
+
+3.反编译源码查看器：JD-GUI
+
+4.反汇编器：hopper disassembler
+
+5.工作环境：MAC
+
+6.apk反编译工具：apktool
+
+## 步骤
+我先从安卓的公开市场去下载某共享单车的安卓app，然后注册使用，用Charles抓包，发现使用https提示<unknown>，下载证书信任https{具体步骤百度有很多教程}，成功抓到一个请求：
+
+	gateway?api=bh.l.nearbyVehicles&sign=4286a61ed2efcf289e0ad5327ecd5fca&apiVersion=1.0.0&hwId=113a7a4375a96777269bd74aa09a7298&klnt=121.556421983507&mobileType=iPhone10%2C1&timestamp=1573198244536&userRole=1&osVersion=13.1.2&osType=1&klat=29.80855278862847&appKey=3c87d752eb39498383de33f065b218eb&appVersion=2.0.4&ttid=bh_app
+	
+观察参数可以发现，有个sign字段，所以推算这个接口应该是做了签名校验的，而常规的签名参数使用请求的参数列表通过某种组合和算法得到，到这一层基本上抓包的工具基本上结束了。接下来就是逆向的工作了。
