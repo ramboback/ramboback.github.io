@@ -6,7 +6,7 @@ categories: 逆向
 ---
 _懂的更多才能更主动！_
 
-逆向基本上是针对客户端反编译的行为，客户端暴露给公众，所以安全尤为重要，总结一下最近自研逆向的心得。
+逆向基本上是针对客户端反编译的行为，客户端暴露给公众，所以安全尤为重要，总结一下最近自研逆向的心得。以下用例只是用做学习，其他用途请绕道！！！
 
 例如，我现在想要分析一款用车app，首先我们先注册以一个正常的用户登录到该系统中，然后通过抓包软件分析网络请求的格式；接着我们再用反编译工具将客户端的可执行程序进行反编译，分析工程代码。
 
@@ -14,7 +14,7 @@ _懂的更多才能更主动！_
 
 1.抓包工具：Charles
 
-2.反编译工具：dex2jar
+2.反编译工具：d2j-dex2jar
 
 3.反编译源码查看器：JD-GUI
 
@@ -25,8 +25,200 @@ _懂的更多才能更主动！_
 6.apk反编译工具：apktool
 
 ## 步骤
-我先从安卓的公开市场去下载某共享单车的安卓app，然后注册使用，用Charles抓包，发现使用https提示<unknown>，下载证书信任https{具体步骤百度有很多教程}，成功抓到一个请求：
+我边实现边写文章，可能有很多弯路，但是关键是记录一下自己的思维方式。开始，我先从安卓的公开市场去下载某共享单车的安卓app，然后注册使用，用Charles抓包，发现使用https提示<unknown>，下载证书信任https{具体步骤百度有很多教程}，成功抓到一个请求：
 
 	gateway?api=bh.l.nearbyVehicles&sign=4286a61ed2efcf289e0ad5327ecd5fca&apiVersion=1.0.0&hwId=113a7a4375a96777269bd74aa09a7298&klnt=121.556421983507&mobileType=iPhone10%2C1&timestamp=1573198244536&userRole=1&osVersion=13.1.2&osType=1&klat=29.80855278862847&appKey=3c87d752eb39498383de33f065b218eb&appVersion=2.0.4&ttid=bh_app
 	
 观察参数可以发现，有个sign字段，所以推算这个接口应该是做了签名校验的，而常规的签名参数使用请求的参数列表通过某种组合和算法得到，到这一层基本上抓包的工具基本上结束了。接下来就是逆向的工作了。
+
+抓包工作可以用iOS系统和安卓系统轻松实现，而反编译来说，安卓的工具更为丰富一些，我先把这个apk包后缀改为.zip，然后解压下来看一下软件结构，抛开其他发现总共有4个classes.dex、classes2.dex、classes3.dex、classes4.dex，这是软件的主程序代码，那我们逐个用dex2jar工具将这4个文件反编译成jar文件
+
+	d2j-dex2jar classes.dex
+	
+反编译成功生成classes-dex2jar.jar文件，然后导入JD-GUi工具，简单过一下，代码全部是a.class，b.class，String a结构，说明代码做了混淆，看起来安全校验做的还不错。碰碰运气咯，因为前面我们通过抓包看到最重要的就是这个sign的签名字段，所以我们就拿sign做为关键字进行全局搜索，总共出现2个结果一个为***pay.pay库，另外一个是bike.kop库，显而易见就是这个bike.kop点开这里的a.class文件，哈哈～
+
+	public static final String a = "api";
+	...
+	public static final String n = "sign";
+全部映入眼帘，剩下的3个class.dex文件就暂时不需要反编译了，签名的算法八九不离十的就是这个a.class文件了，接下来就是分析这个文件的签名加密算法了。代码太多，首先去找哪里引用了这个"sign"字段，
+
+	public String a(a parama) {
+	    this.z = parama.g();
+	    this.A = parama.f();
+	    String str2 = this.x.a();
+	    String str3 = this.x.b();
+	    this.w.put("apiVersion", str3);
+	    d();
+	    a a1 = new a(this, parama.e(), parama.b(), parama.c(), parama.d());
+	    a1.a("api", str2);
+	    for (Map.Entry<String, String> entry : this.w.entrySet())
+	      a1.a((String)entry.getKey(), entry.getValue()); 
+	    this.w.put("api", str2);
+	    a(this.w);
+	    String str1 = "";
+	    try {
+	      str2 = a(this.w);
+	      str1 = str2;
+	    } catch (Exception exception) {}
+	    a1.a("sign", str1);
+	    return a1.a();
+	  }
+	  
+阅读这段核心加密代码，可以看到它把需要计算的参数保存在map数据结构中，再看一下其他参数的使用的地方
+
+	private void d() {
+	    if (this.x.d()) {
+	      c c1 = (c)c.a().a(this.v, c.class);
+	      if (c1 != null && c1.a(c1.b())) {
+	        this.w.put("token", c1.c());
+	        this.w.put("userId", c1.d());
+	      } 
+	      this.w.put("userRole", "1");
+	    } 
+	    this.w.put("appKey", f());
+	    this.w.put("appVersion", g.a(this.v));
+	    this.w.put("ttid", a());
+	    this.w.put("osType", "2");
+	    this.w.put("osVersion", Build.VERSION.RELEASE);
+	    this.w.put("mobileType", Build.MODEL);
+	    this.w.put("hwId", g.c(this.v));
+	    this.w.put("timestamp", g());
+	    a a1 = (a)c.a().a(this.v, a.class);
+	    if (a1 != null) {
+	      b b1 = a1.n();
+	      this.w.put("klat", String.valueOf(b1.a));
+	      this.w.put("klnt", String.valueOf(b1.b));
+	    } 
+	  }
+乍看这段代码，一开始我也想着怎么去读懂它，但是混淆过的代码，读懂还是很有难度的，所以后来想想换个思路，顺着签名的思路来，我们有抓包的数据，其实核心思想就是看抓包里的参数哪些有用到，然后通过何种方式进行组合排列，
+
+	for (Map.Entry<String, String> entry : this.w.entrySet())
+其实就是这串代码，暂时就先到这里，看看它怎么加密。回过头看上一段sign代码，阅读一下，可以看到 a1.a("sign", str1);而str1 = str2;str2 = a(this.w);我们点进a(this.w)看一下。
+
+	private String a(TreeMap<String, String> paramTreeMap) throws Exception {
+	    StringBuilder stringBuilder2 = new StringBuilder();
+	    for (Map.Entry<String, String> entry : paramTreeMap.entrySet()) {
+	      if (entry.getValue() == null)
+	        continue; 
+	      stringBuilder2.append((String)entry.getKey());
+	      stringBuilder2.append((String)entry.getValue());
+	    } 
+	    StringBuilder stringBuilder1 = new StringBuilder();
+	    stringBuilder1.append("sign source : ");
+	    stringBuilder1.append(stringBuilder2.toString());
+	    a.b("RequestBuilder", stringBuilder1.toString());
+	    String str = e();
+	    StringBuilder stringBuilder3 = new StringBuilder();
+	    stringBuilder3.append(str);
+	    stringBuilder3.append(stringBuilder2.toString());
+	    stringBuilder3.append(str);
+	    return e.a(stringBuilder3.toString().toString());
+	  }
+很明显，这段代码就是加密的算法了，sign加盐值为String str = e();而加密算法为e.a(stringBuilder3.toString().toString());再点进去看一下加密算法：
+
+	public static final String a(String paramString) {
+	    try {
+	      byte[] arrayOfByte = paramString.getBytes("UTF-8");
+	      MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+	      messageDigest.update(arrayOfByte);
+	      arrayOfByte = messageDigest.digest();
+	      StringBuffer stringBuffer = new StringBuffer(arrayOfByte.length * 2);
+	      int j = arrayOfByte.length;
+	      for (int i = 0; i < j; i++) {
+	        byte b = arrayOfByte[i];
+	        stringBuffer.append(Character.forDigit((b & 0xF0) >> 4, 16));
+	        stringBuffer.append(Character.forDigit(b & 0xF, 16));
+	      } 
+	      return stringBuffer.toString();
+	    } catch (Throwable throwable) {
+	      return "";
+	    } 
+	  }
+md5的加密，其实上面通过抓包看一下sign的位数32位就能大概猜出来是md5加密sign了，算法也都有了 ，那最后还差一步，盐值String str = e();点进去看一下private String e() { return this.z; } 到此这个z的值就是盐值，翻边了整个类，没看到其他有关这个z属性的引用，线索就此断了。回过头再思考一下，加密是通过特定的query参数，然后通过map排序md5加密后放入sign过签。那我先写一个脚本来测一下这种流程验证是否成立：
+
+	public static void main(String[] args) throws Exception{
+	        TreeMap<String, String> stringStringTreeMap = new TreeMap<>();
+	        stringStringTreeMap.put("apiVersion","1.0.0");
+	        stringStringTreeMap.put("api","{隐藏}/gateway?api=bh.l.nearbyVehicles");
+	        stringStringTreeMap.put("hwId","113a7a4375a96777269bd74aa09a7298");
+	        stringStringTreeMap.put("klnt","121.556421983507");
+	        stringStringTreeMap.put("mobileType","iPhone10%2C1");
+	        stringStringTreeMap.put("timestamp","1573198244536");
+	        stringStringTreeMap.put("userRole","1");
+	        stringStringTreeMap.put("osVersion","13.1.2");
+	        stringStringTreeMap.put("osType","2");
+	        stringStringTreeMap.put("klat","29.80855278862847");
+	        stringStringTreeMap.put("appKey","3c87d752eb39498383de33f065b218eb");
+	        stringStringTreeMap.put("ttid","bh_app");
+	        String signStr = AignString(stringStringTreeMap);
+	        System.out.print(signStr);
+	    }
+	
+	    private static String AignString(TreeMap<String, String> paramTreeMap) throws Exception {
+	        StringBuilder stringBuilder2 = new StringBuilder();
+	        for (Map.Entry<String, String> entry : paramTreeMap.entrySet()) {
+	            if (entry.getValue() == null)
+	                continue;
+	            stringBuilder2.append((String)entry.getKey());
+	            stringBuilder2.append((String)entry.getValue());
+	        }
+	        String str = "sign={盐值}";
+	        StringBuilder stringBuilder3 = new StringBuilder();
+	        stringBuilder3.append(str);
+	        stringBuilder3.append(stringBuilder2.toString());
+	        stringBuilder3.append(str);
+	        return MD5String(stringBuilder3.toString());
+	    }
+	
+	    //MD5加密算法
+	    public static final String MD5String(String paramString) {
+	        try {
+	            byte[] arrayOfByte = paramString.getBytes("UTF-8");
+	            MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+	            messageDigest.update(arrayOfByte);
+	            arrayOfByte = messageDigest.digest();
+	            StringBuffer stringBuffer = new StringBuffer(arrayOfByte.length * 2);
+	            int j = arrayOfByte.length;
+	            for (int i = 0; i < j; i++) {
+	                byte b = arrayOfByte[i];
+	                stringBuffer.append(Character.forDigit((b & 0xF0) >> 4, 16));
+	                stringBuffer.append(Character.forDigit(b & 0xF, 16));
+	            }
+	            return stringBuffer.toString();
+	        } catch (Throwable throwable) {
+	            return "";
+	        }
+	    }
+控制台打印：8b32b576f601d95b85b46947e5f4e697，脚本大致成立，先不论正确与否，整体的流程已经明朗了。接下来就是找这个盐值的工作，我陷入了沉思...
+
+过了2天时间稍稍充裕点，翻过来一想，会不会从so文件里提取出来的，进入lib目录查看一下，哎～，有几个文件比较可疑：libsignkey.so、libsecurity.so、libsecurityTracker.so，暂时看起来这个libsignkey.so最可疑，逆向一定要从最可疑的文件入手，这样可以减少很多的工作量。把这个so文件拖入hopper中，因为so文件通过elf结构写的，安全性很高，所以先静态分析一下，茫茫汇编如何入手，自然是搜索啦，我先搜了一下关键字“sign”，优先找全匹配的函数和变量，几十个耐心看一下，哎～
+
+	Java_com_**_sdk_signkylib_SignKey_getPhoneSignKey
+哈哈，这个最可疑了，点进去看一下伪代码，
+
+	int Java_com_didi_sdk_signkylib_SignKey_getPhoneSignKey(int arg0, int arg1) {
+	    sp = sp - 0x90;
+	    std::__ndk1::__compressed_pair_elem<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::__rep, 0, false>::__compressed_pair_elem();
+	    std::__ndk1::__compressed_pair_elem<std::__ndk1::allocator<char>, 1, true>::__compressed_pair_elem();
+	    std::__ndk1::char_traits<char>::length();
+	    std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::__init();
+	    var_7C = arg0;
+	    var_80 = sp + 0x78;
+	    if (*(int8_t *)std::__ndk1::__compressed_pair_elem<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::__rep, 0, false>::__get() << 0x1f != 0x0) {
+	            var_84 = *(std::__ndk1::__compressed_pair_elem<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::__rep, 0, false>::__get() + 0x8);
+	    }
+	    else {
+	            var_84 = std::__ndk1::__compressed_pair_elem<std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::__rep, 0, false>::__get() + 0x1;
+	    }
+	    var_88 = _JNIEnv::NewStringUTF();
+	    var_4 = **0x23db0;
+	    std::__ndk1::basic_string<char, std::__ndk1::char_traits<char>, std::__ndk1::allocator<char> >::~basic_string();
+	    if (**0x23db0 == var_4) {
+	            r0 = var_88;
+	    }
+	    else {
+	            r0 = __stack_chk_fail();
+	    }
+	    return r0;
+	}
+好像看起来没有任何有用的信息，这个盐值并没有如预期一样跳出来，那咋整呢，分析一下代码，var_88 = _JNIEnv::NewStringUTF();这串代码好像有点线索。
