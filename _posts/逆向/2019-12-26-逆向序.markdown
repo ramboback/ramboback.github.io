@@ -114,6 +114,7 @@ _懂的更多才能更主动！_
 	    stringBuilder3.append(str);
 	    return e.a(stringBuilder3.toString().toString());
 	  }
+
 很明显，这段代码就是加密的算法了，sign加盐值为String str = e();而加密算法为e.a(stringBuilder3.toString().toString());再点进去看一下加密算法：
 
 	public static final String a(String paramString) {
@@ -134,6 +135,7 @@ _懂的更多才能更主动！_
 	      return "";
 	    } 
 	  }
+
 md5的加密，其实上面通过抓包看一下sign的位数32位就能大概猜出来是md5加密sign了，算法也都有了 ，那最后还差一步，盐值String str = e();点进去看一下private String e() { return this.z; } 到此这个z的值就是盐值，翻边了整个类，没看到其他有关这个z属性的引用，线索就此断了。回过头再思考一下，加密是通过特定的query参数，然后通过map排序md5加密后放入sign过签。那我先写一个脚本来测一下这种流程验证是否成立：
 
 	public static void main(String[] args) throws Exception{
@@ -189,11 +191,13 @@ md5的加密，其实上面通过抓包看一下sign的位数32位就能大概�
 	            return "";
 	        }
 	    }
+
 控制台打印：8b32b576f601d95b85b46947e5f4e697，脚本大致成立，先不论正确与否，整体的流程已经明朗了。接下来就是找这个盐值的工作，我陷入了沉思...
 
 过了2天时间稍稍充裕点，翻过来一想，会不会从so文件里提取出来的，进入lib目录查看一下，哎～，有几个文件比较可疑：libsignkey.so、libsecurity.so、libsecurityTracker.so，暂时看起来这个libsignkey.so最可疑，逆向一定要从最可疑的文件入手，这样可以减少很多的工作量。把这个so文件拖入hopper中，因为so文件通过elf结构写的，安全性很高，所以先静态分析一下，茫茫汇编如何入手，自然是搜索啦，我先搜了一下关键字“sign”，优先找全匹配的函数和变量，几十个耐心看一下，哎～
 
 	Java_com_**_sdk_signkylib_SignKey_getPhoneSignKey
+
 哈哈，这个最可疑了，点进去看一下伪代码，
 
 	int Java_com_didi_sdk_signkylib_SignKey_getPhoneSignKey(int arg0, int arg1) {
@@ -221,4 +225,5 @@ md5的加密，其实上面通过抓包看一下sign的位数32位就能大概�
 	    }
 	    return r0;
 	}
+
 好像看起来没有任何有用的信息，这个盐值并没有如预期一样跳出来，那咋整呢，分析一下代码，var_88 = _JNIEnv::NewStringUTF();这串代码好像有点线索。
