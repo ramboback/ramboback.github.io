@@ -80,3 +80,111 @@ categories: 技术栈
 	如果基类还存在自身的基类，那么第二个基类也将被加载，以此类推。接下来，根基类（例子中根基类是 Insect）的 static 的初始化开始执行，接着是派生类，以此类推。这点很重要，因为派生类中 static 的初始化可能依赖基类成员是否被正确地初始化。
 
 	至此，必要的类都加载完毕，可以创建对象了。首先，对象中的所有基本类型变量都被置为默认值，对象引用被设为 null —— 这是通过将对象内存设为二进制零值一举生成的。接着会调用基类的构造器。本例中是自动调用的，但是你也可以使用 super 调用指定的基类构造器（在 Beetle 构造器中的第一步操作）。基类构造器和派生类构造器一样以相同的顺序经历相同的过程。当基类构造器完成后，实例变量按文本顺序初始化。最终，构造器的剩余部分被执行。
+	
+---
+### 多态
+
+* 方法调用绑定
+
+	将一个方法调用和一个方法主体关联起来称作绑定。若绑定发生在程序运行前（如果有的话，由编译器和链接器实现），叫做前期绑定。你可能从来没有听说这个术语，因为它是面向过程语言不需选择默认的绑定方式，例如在 C 语言中就只有前期绑定这一种方法调用。
+	
+	上述程序让人困惑的地方就在于前期绑定，因为编译器只知道一个 Instrument 引用，它无法得知究竟会调用哪个方法。
+
+	解决方法就是后期绑定，意味着在运行时根据对象的类型进行绑定。后期绑定也称为动态绑定或运行时绑定。当一种语言实现了后期绑定，就必须具有某种机制在运行时能判断对象的类型，从而调用恰当的方法。也就是说，编译器仍然不知道对象的类型，但是方法调用机制能找到正确的方法体并调用。每种语言的后期绑定机制都不同，但是可以想到，对象中一定存在某种类型信息。
+
+	Java 中除了 static 和 final 方法（private 方法也是隐式的 final）外，其他所有方法都是后期绑定。这意味着通常情况下，我们不需要判断后期绑定是否会发生——它自动发生。
+
+	为什么将一个对象指明为 final ？正如前一章所述，它可以防止方法被重写。但更重要的一点可能是，它有效地”关闭了“动态绑定，或者说告诉编译器不需要对其进行动态绑定。这可以让编译器为 final 方法生成更高效的代码。然而，大部分情况下这样做不会对程序的整体性能带来什么改变，因此最好是为了设计使用 final，而不是为了提升性能而使用。
+	
+* 陷阱：“重写”私有方法
+
+		// polymorphism/PrivateOverride.java
+		// Trying to override a private method
+		// {java polymorphism.PrivateOverride}
+		package polymorphism;
+	
+		public class PrivateOverride {
+	    	private void f() {
+	        	System.out.println("private f()");
+	    }
+	    
+	    public static void main(String[] args) {
+	        PrivateOverride po = new Derived();
+	        po.f();
+	    }
+		}
+	
+		public Derived extends PrivateOverride {
+	    public void f() {
+	        System.out.println("public f()");
+	    }
+		}
+		
+	输出：
+	
+		private f()
+		
+你可能期望输出是 public f()，然而 private 方法也是 final 的，对于派生类来说是隐蔽的。因此，这里 Derived 的 f() 是一个全新的方法；因为基类版本的 f() 屏蔽了 Derived ，因此它都不算是重写方法。
+
+结论是只有非 private 方法才能被重写，但是得小心重写 private 方法的现象，编译器不报错，但不会按我们所预期的执行。为了清晰起见，派生类中的方法名采用与基类中 private 方法名不同的命名。
+
+如果使用了 @Override 注解，就能检测出问题。
+
+* 构造器调用顺序
+
+	在派生类的构造过程中总会调用基类的构造器。初始化会自动按继承层次结构上移，因此每个基类的构造器都会被调用到。这么做是有意义的，因为构造器有着特殊的任务：检查对象是否被正确地构造。由于属性通常声明为 private，你必须假定派生类只能访问自己的成员而不能访问基类的成员。只有基类的构造器拥有恰当的知识和权限来初始化自身的元素。因此，必须得调用所有构造器；否则就不能构造完整的对象。这就是编译器强制每个派生类部分必须调用构造器的原因。如果在派生类的构造器主体中没有显式地调用基类构造器，编译器就会默默地调用无参构造器。如果没有无参构造器，编译器就会报错（当类中不含构造器时，编译器会自动合成一个无参构造器）。
+	Glyph() before draw()
+	Glyph.draw()
+	Glyph() after draw()
+	RoundGlyph.RoundGlyph(), radius = 5
+
+* 构造器内部多态方法的行为
+
+		// polymorphism/PolyConstructors.java
+		// Constructors and polymorphism
+		// don't produce what you might expect
+		class Glyph {
+		   		 void draw() {
+	        	System.out.println("Glyph.draw()");
+	    	}
+
+    	Glyph() {
+        System.out.println("Glyph() before draw()");
+        draw();
+        System.out.println("Glyph() after draw()");
+    	}
+		}
+
+		class RoundGlyph extends Glyph {
+	    private int radius = 1;
+
+	    RoundGlyph(int r) {
+	        radius = r;
+	        System.out.println("RoundGlyph.RoundGlyph(), radius = " + radius);
+	    }
+
+	    @Override
+	    void draw() {
+	        System.out.println("RoundGlyph.draw(), radius = " + radius);
+	    }
+		}
+	
+		public class PolyConstructors {
+	    public static void main(String[] args) {
+	        new RoundGlyph(5);
+	    }
+		}
+		
+输出：
+
+	Glyph() before draw()
+	RoundGlyph.draw(), radius = 0
+	Glyph() after draw()
+	RoundGlyph.RoundGlyph(), radius = 5
+	
+初始化的实际过程是：
+
+在所有事发生前，分配给对象的存储空间会被初始化为二进制 0。
+如前所述调用基类构造器。此时调用重写后的 draw() 方法（是的，在调用 RoundGraph 构造器之前调用），由步骤 1 可知，radius 的值为 0。
+按声明顺序初始化成员。最终调用派生类的构造器。
+
